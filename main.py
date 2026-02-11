@@ -41,7 +41,7 @@ class MissAVPlugin(Star):
         return self.config.get("missav_proxy", "")
 
     def _get_blur_level(self):
-        return self.config.get("missav_blur_level", 20)
+        return self.config.get("missav_blur_level", 5)
 
 
 
