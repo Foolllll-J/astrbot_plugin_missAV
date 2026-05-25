@@ -5,7 +5,7 @@ import hmac
 import hashlib
 import aiohttp
 from PIL import Image, ImageFilter
-from astrbot.api.event import filter, AstrMessageEvent
+from astrbot.api.event import filter, AstrMessageEvent, MessageChain
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
 from astrbot.api.message_components import Node, Plain, Image as CompImage
@@ -296,22 +296,38 @@ class MissAVPlugin(Star):
                 content = [Plain(info)]
                 if img_path:
                     content.append(CompImage.fromFileSystem(img_path))
-                
+
                 node = Node(
                     uin=event.message_obj.self_id,
                     name="影片信息",
                     content=content
                 )
-                yield event.chain_result([node])
-            else:
-                # 普通发送
                 if img_path:
-                    yield event.chain_result([Comp.Plain(info), Comp.Image.fromFileSystem(img_path)])
+                    try:
+                        await event.send(MessageChain([node]))
+                    except Exception as e:
+                        logger.warning(f"合并转发带图发送失败，回退到无图合并转发: {e}")
+                        await event.send(MessageChain([Node(
+                            uin=event.message_obj.self_id,
+                            name="影片信息",
+                            content=[Plain(info)]
+                        )]))
                 else:
-                    msg = info
-                    if show_cover and video['thumbnail'] and not img_path:
-                        msg += "\n(封面图下载失败)"
-                    yield event.plain_result(msg)
+                    yield event.chain_result([node])
+                return
+
+            # 普通发送
+            if img_path:
+                try:
+                    await event.send(MessageChain([Comp.Plain(info), Comp.Image.fromFileSystem(img_path)]))
+                except Exception as e:
+                    logger.warning(f"带图发送失败，回退到纯文本: {e}")
+                    yield event.plain_result(info)
+            else:
+                msg = info
+                if show_cover and video['thumbnail'] and not img_path:
+                    msg += "\n(封面图下载失败)"
+                yield event.plain_result(msg)
                     
         except Exception as e:
             logger.error(f"获取视频信息失败: {e}")
